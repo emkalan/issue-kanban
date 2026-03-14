@@ -1,0 +1,4 @@
+- python to call github api
+- pipe into gemini api
+- let gemini handle serialization to json
+- use frontend to parse json into kanban
