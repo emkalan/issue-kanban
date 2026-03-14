@@ -16,63 +16,10 @@ CORS(app)
 GEMINI_API_KEY = os.getenv("GEMINI_API_KEY")
 
 if not GEMINI_API_KEY:
-    raise RuntimeError(
-        "bruh moment: Missing GEMINI_API_KEY in environment, Emma's fault"
-    )
+    raise RuntimeError("bruh moment: Missing GEMINI_API_KEY in environment, Emma's fault")
 
 genai.configure(api_key=GEMINI_API_KEY)
-model = genai.GenerativeModel(
-    model_name="gemini-2.5-flash",
-    generation_config={
-        "response_mime_type": "application/json",
-        "response_schema": {
-            "type": "object",
-            "properties": {
-                "columns": {
-                    "type": "array",
-                    "items": {
-                        "type": "object",
-                        "properties": {
-                            "name": {"type": "string"},
-                            "cards": {
-                                "type": "array",
-                                "items": {
-                                    "type": "object",
-                                    "properties": {
-                                        "id": {"type": "integer"},
-                                        "title": {"type": "string"},
-                                        "body": {"type": "string"},
-                                        "labels": {
-                                            "type": "array",
-                                            "items": {"type": "string"},
-                                        },
-                                        "assignees": {
-                                            "type": "array",
-                                            "items": {"type": "string"},
-                                        },
-                                        "state": {"type": "string"},
-                                        "url": {"type": "string"},
-                                    },
-                                    "required": [
-                                        "id",
-                                        "title",
-                                        "body",
-                                        "labels",
-                                        "assignees",
-                                        "state",
-                                        "url",
-                                    ],
-                                },
-                            },
-                        },
-                        "required": ["name", "cards"],
-                    },
-                }
-            },
-            "required": ["columns"],
-        },
-    },
-)
+model = genai.GenerativeModel("gemini-2.5-flash")
 
 
 def fetch_github_issues(repo, github_token):
@@ -89,24 +36,22 @@ def fetch_github_issues(repo, github_token):
         raise RuntimeError(f"bruh moment! GitHub request failed: {e}")
 
     raw_items = response.json()
-
+    
     issues = []
     for item in raw_items:
         # dont care abt prs
         if "pull_request" in item:
             continue
 
-        issues.append(
-            {
-                "number": item.get("number"),
-                "title": item.get("title"),
-                "body": (item.get("body") or "")[:200],  # save tokens live better
-                "state": item.get("state"),
-                "labels": [label["name"] for label in item.get("labels", [])],
-                "assignees": [a["login"] for a in item.get("assignees", [])],
-                "html_url": item.get("html_url"),
-            }
-        )
+        issues.append({
+            "number": item.get("number"),
+            "title": item.get("title"),
+            "body": (item.get("body") or "")[:200], #save tokens live better
+            "state": item.get("state"),
+            "labels": [label["name"] for label in item.get("labels", [])],
+            "assignees": [a["login"] for a in item.get("assignees", [])],
+            "html_url": item.get("html_url"),
+        })
 
     return issues
 
@@ -191,9 +136,7 @@ def extract_json(text):
             except json.JSONDecodeError:
                 continue
 
-    raise ValueError(
-        "bruh moment: Gemini yapped too much and didn't return valid JSON!"
-    )
+    raise ValueError("bruh moment: Gemini yapped too much and didn't return valid JSON!")
 
 
 @app.route("/", methods=["GET"])
@@ -207,41 +150,32 @@ def generate_kanban():
         data = request.get_json()
 
         if not data:
-            return (
-                jsonify(
-                    {"bruh moment": "Missing JSON body! Gemini's fault probably?!"}
-                ),
-                400,
-            )
+            return jsonify({"bruh moment": "Missing JSON body! Gemini's fault probably?!"}), 400
 
         repo = data.get("repo")
         github_token = data.get("github_token")
 
         if not repo:
-            return (
-                jsonify(
-                    {
-                        "bruh moment": "what `repo` am I meant to look at! Use format owner/repo"
-                    }
-                ),
-                400,
-            )
+            return jsonify({"bruh moment": "what `repo` am I meant to look at! Use format owner/repo"}), 400
 
         if not github_token:
-            return (
-                jsonify(
-                    {
-                        "bruh moment": "authentication failed, nice try tho. Missing 'github_token'"
-                    }
-                ),
-                400,
-            )
+            return jsonify({"bruh moment": "authentication failed, nice try tho. Missing 'github_token'"}), 400
 
         issues = fetch_github_issues(repo, github_token)
 
         prompt = build_prompt(issues)
         gemini_response = model.generate_content(prompt)
-        kanban_json = json.loads(gemini_response.text)
+
+        text = getattr(gemini_response, "text", None)
+
+        if not text:
+            try:
+                text = gemini_response.candidates[0].content.parts[0].text
+            except Exception:
+                raise RuntimeError("bruh moment: Gemini returned something cursed and unreadable")
+
+        kanban_json = extract_json(text)
+
 
         return jsonify({"repo": repo, "issue_count": len(issues), "board": kanban_json})
 
