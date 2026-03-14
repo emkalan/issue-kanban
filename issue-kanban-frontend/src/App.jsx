@@ -17,25 +17,44 @@ import {
   verticalListSortingStrategy,
 } from "@dnd-kit/sortable";
 import { CSS } from "@dnd-kit/utilities";
+import "./App.css";
 
 const API_BASE = "http://127.0.0.1:5000";
 const COLUMN_ORDER = ["Backlog", "Todo", "Doing", "Done"];
 
+const COLUMN_CLASSES = {
+  Backlog: "col-backlog",
+  Todo:    "col-todo",
+  Doing:   "col-doing",
+  Done:    "col-done",
+};
+
+// Label chip colours — hashed by name for consistency
+const LABEL_PALETTES = [
+  { bg: "rgba(59,130,246,0.12)",  border: "rgba(59,130,246,0.3)",  color: "#93c5fd" },
+  { bg: "rgba(168,85,247,0.12)",  border: "rgba(168,85,247,0.3)",  color: "#c4b5fd" },
+  { bg: "rgba(34,197,94,0.12)",   border: "rgba(34,197,94,0.3)",   color: "#86efac" },
+  { bg: "rgba(249,115,22,0.12)",  border: "rgba(249,115,22,0.3)",  color: "#fdba74" },
+  { bg: "rgba(236,72,153,0.12)",  border: "rgba(236,72,153,0.3)",  color: "#f9a8d4" },
+  { bg: "rgba(20,184,166,0.12)",  border: "rgba(20,184,166,0.3)",  color: "#5eead4" },
+];
+
+function hashLabel(str) {
+  let h = 0;
+  for (const c of str) h = (h * 31 + c.charCodeAt(0)) & 0xffff;
+  return h % LABEL_PALETTES.length;
+}
+
 function customCollisionDetection(args) {
   const pointerCollisions = pointerWithin(args);
-
-  if (pointerCollisions.length > 0) {
-    return pointerCollisions;
-  }
-
+  if (pointerCollisions.length > 0) return pointerCollisions;
   return rectIntersection(args);
 }
 
 function findColumnForCard(board, cardId) {
   for (const column of board.columns) {
-    if (column.cards.some((card) => String(card.id) === String(cardId))) {
+    if (column.cards.some((card) => String(card.id) === String(cardId)))
       return column.name;
-    }
   }
   return null;
 }
@@ -43,17 +62,13 @@ function findColumnForCard(board, cardId) {
 function findCardById(board, cardId) {
   for (const column of board.columns) {
     const card = column.cards.find((card) => String(card.id) === String(cardId));
-    if (card) {
-      return card;
-    }
+    if (card) return card;
   }
   return null;
 }
 
 function moveCardInBoard(board, cardId, sourceColumnName, targetColumnName) {
-  if (sourceColumnName === targetColumnName) {
-    return board;
-  }
+  if (sourceColumnName === targetColumnName) return board;
 
   const nextColumns = board.columns.map((col) => ({
     ...col,
@@ -62,103 +77,125 @@ function moveCardInBoard(board, cardId, sourceColumnName, targetColumnName) {
 
   const sourceColumn = nextColumns.find((c) => c.name === sourceColumnName);
   const targetColumn = nextColumns.find((c) => c.name === targetColumnName);
-
-  if (!sourceColumn || !targetColumn) {
-    return board;
-  }
+  if (!sourceColumn || !targetColumn) return board;
 
   const cardIndex = sourceColumn.cards.findIndex(
     (card) => String(card.id) === String(cardId)
   );
-
-  if (cardIndex === -1) {
-    return board;
-  }
+  if (cardIndex === -1) return board;
 
   const [movedCard] = sourceColumn.cards.splice(cardIndex, 1);
   targetColumn.cards.unshift(movedCard);
 
-  return {
-    ...board,
-    columns: nextColumns,
-  };
+  return { ...board, columns: nextColumns };
 }
 
-function CardContent({ card, dragging = false }) {
+// ── Label chip ───────────────────────────────────────────────
+function LabelChip({ label }) {
+  const palette = LABEL_PALETTES[hashLabel(label)];
   return (
-    <div
+    <span
+      className="label-chip"
       style={{
-        background: "white",
-        padding: 10,
-        marginBottom: 10,
-        borderRadius: 6,
-        boxShadow: dragging ? "0 10px 24px rgba(0,0,0,0.18)" : "none",
-        opacity: dragging ? 0.95 : 1,
+        background: palette.bg,
+        borderColor: palette.border,
+        color: palette.color,
       }}
     >
-      <strong>
-        #{card.id} {card.title}
-      </strong>
-
-      <p style={{ fontSize: 14, whiteSpace: "pre-wrap" }}>{card.body}</p>
-
-      <a href={card.url} target="_blank" rel="noreferrer">
-        open on github
-      </a>
-    </div>
+      {label}
+    </span>
   );
 }
 
-function SortableCard({ card }) {
-  const {
-    attributes,
-    listeners,
-    setNodeRef,
-    transform,
-    transition,
-    isDragging,
-  } = useSortable({
-    id: `card-${card.id}`,
-    data: {
-      type: "card",
-      cardId: card.id,
-    },
-  });
+// ── Avatar ───────────────────────────────────────────────────
+function Avatar({ login }) {
+  return <div className="avatar">{login.slice(0, 2)}</div>;
+}
 
-  const style = {
-    transform: CSS.Transform.toString(transform),
-    transition,
-    cursor: "grab",
-    opacity: isDragging ? 0.35 : 1,
-  };
-
+// ── Card content (shared between drag overlay and sortable) ──
+function CardContent({ card, dragging = false }) {
   return (
-    <div ref={setNodeRef} style={style} {...attributes} {...listeners}>
-      <CardContent card={card} />
+    <div className={`card${dragging ? " dragging" : ""}`}>
+      <div className="card-header">
+        <span className="card-id">#{card.id}</span>
+        {card.url && (
+          <a
+            href={card.url}
+            target="_blank"
+            rel="noreferrer"
+            className="gh-link"
+            onClick={(e) => e.stopPropagation()}
+          >
+            ↗ GitHub
+          </a>
+        )}
+      </div>
+
+      <p className="card-title">{card.title}</p>
+
+      {card.body && <p className="card-body">{card.body}</p>}
+
+      {(card.labels?.length > 0 || card.assignees?.length > 0) && (
+        <div className="card-footer">
+          <div className="card-labels">
+            {card.labels?.map((l) => (
+              <LabelChip key={l} label={l} />
+            ))}
+          </div>
+          <div className="assignees">
+            {card.assignees?.map((a) => (
+              <Avatar key={a} login={a} />
+            ))}
+          </div>
+        </div>
+      )}
     </div>
   );
 }
 
-function Column({ name, cards }) {
-  const { setNodeRef, isOver } = useDroppable({
-    id: `column-${name}`,
-    data: {
-      type: "column",
-      columnName: name,
-    },
-  });
+// ── Sortable card ────────────────────────────────────────────
+function SortableCard({ card }) {
+  const { attributes, listeners, setNodeRef, transform, transition, isDragging } =
+    useSortable({
+      id: `card-${card.id}`,
+      data: { type: "card", cardId: card.id },
+    });
 
   return (
     <div
       ref={setNodeRef}
       style={{
-        background: isOver ? "#ddd" : "#eee",
-        padding: 10,
-        borderRadius: 10,
-        minHeight: 300,
+        transform: CSS.Transform.toString(transform),
+        transition,
+        opacity: isDragging ? 0.3 : 1,
       }}
+      {...attributes}
+      {...listeners}
     >
-      <h3>{name}</h3>
+      <CardContent card={card} />
+    </div>
+  );
+}
+
+// ── Column ───────────────────────────────────────────────────
+function Column({ name, cards }) {
+  const { setNodeRef, isOver } = useDroppable({
+    id: `column-${name}`,
+    data: { type: "column", columnName: name },
+  });
+
+  const colClass = COLUMN_CLASSES[name] || "";
+
+  return (
+    <div
+      ref={setNodeRef}
+      className={`column ${colClass}${isOver ? " is-over" : ""}`}
+    >
+      <div className="column-header">
+        <span className="status-dot" />
+        <h3>{name}</h3>
+        <span className="count">{cards.length}</span>
+      </div>
 
       <SortableContext
         items={cards.map((card) => `card-${card.id}`)}
@@ -169,80 +206,71 @@ function Column({ name, cards }) {
         ))}
 
         {cards.length === 0 && (
-          <div
-            style={{
-              minHeight: 120,
-              border: "2px dashed #bbb",
-              borderRadius: 8,
-              display: "flex",
-              alignItems: "center",
-              justifyContent: "center",
-              color: "#666",
-              background: "#f8f8f8",
-            }}
-          >
-            Drop here
-          </div>
+          <div className="empty-placeholder">no issues here</div>
         )}
       </SortableContext>
     </div>
   );
 }
 
+// ── Loading overlay ──────────────────────────────────────────
+function LoadingOverlay({ message = "Fetching issues…" }) {
+  return (
+    <div className="loading-overlay">
+      <div className="loading-card">
+        <div className="dot-spinner">
+          <span /><span /><span />
+        </div>
+        <div className="loading-label">{message}</div>
+      </div>
+    </div>
+  );
+}
+
+// ── App ──────────────────────────────────────────────────────
 export default function App() {
-  const [repo, setRepo] = useState("");
+  const [repo, setRepo]               = useState("");
   const [githubToken, setGithubToken] = useState("");
-  const [board, setBoard] = useState(null);
-  const [error, setError] = useState("");
-  const [isMoving, setIsMoving] = useState(false);
+  const [board, setBoard]             = useState(null);
+  const [error, setError]             = useState("");
+  const [isLoading, setIsLoading]     = useState(false);
+  const [isMoving, setIsMoving]       = useState(false);
   const [activeCardId, setActiveCardId] = useState(null);
 
   const sensors = useSensors(
     useSensor(PointerSensor),
-    useSensor(KeyboardSensor, {
-      coordinateGetter: sortableKeyboardCoordinates,
-    })
+    useSensor(KeyboardSensor, { coordinateGetter: sortableKeyboardCoordinates })
   );
 
   async function loadBoard(e) {
     e.preventDefault();
     setError("");
+    setIsLoading(true);
 
     try {
       const res = await fetch(`${API_BASE}/kanban`, {
         method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify({
-          repo,
-          github_token: githubToken,
-        }),
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ repo, github_token: githubToken }),
       });
 
       const data = await res.json();
 
-      if (!res.ok) {
-        throw new Error(data["bruh moment"] || "failed");
-      }
+      if (!res.ok) throw new Error(data["bruh moment"] || "failed");
 
       setBoard(data.board);
     } catch (err) {
       setError(err.message);
+    } finally {
+      setIsLoading(false);
     }
   }
 
   function handleDragStart(event) {
     const { active } = event;
-
-    if (!active) {
-      return;
-    }
-
-    if (String(active.id).startsWith("card-")) {
-      const issueNumber = String(active.id).replace("card-", "");
-      setActiveCardId(issueNumber);
-    }
+    if (!active) return;
+    if (String(active.id).startsWith("card-"))
+      setActiveCardId(String(active.id).replace("card-", ""));
   }
 
   function handleDragCancel() {
@@ -258,44 +286,29 @@ export default function App() {
     }
 
     const activeId = active.id;
-    const overId = over.id;
+    const overId   = over.id;
 
     if (!String(activeId).startsWith("card-")) {
       setActiveCardId(null);
       return;
     }
 
-    const issueNumber = String(activeId).replace("card-", "");
+    const issueNumber    = String(activeId).replace("card-", "");
     const sourceColumnName = findColumnForCard(board, issueNumber);
 
     let targetColumnName = null;
-
-    if (String(overId).startsWith("column-")) {
+    if (String(overId).startsWith("column-"))
       targetColumnName = String(overId).replace("column-", "");
-    } else if (String(overId).startsWith("card-")) {
-      targetColumnName = findColumnForCard(
-        board,
-        String(overId).replace("card-", "")
-      );
-    }
+    else if (String(overId).startsWith("card-"))
+      targetColumnName = findColumnForCard(board, String(overId).replace("card-", ""));
 
-    if (!sourceColumnName || !targetColumnName) {
+    if (!sourceColumnName || !targetColumnName || sourceColumnName === targetColumnName) {
       setActiveCardId(null);
       return;
     }
 
-    if (sourceColumnName === targetColumnName) {
-      setActiveCardId(null);
-      return;
-    }
-
-    const previousBoard = board;
-    const optimisticBoard = moveCardInBoard(
-      board,
-      issueNumber,
-      sourceColumnName,
-      targetColumnName
-    );
+    const previousBoard   = board;
+    const optimisticBoard = moveCardInBoard(board, issueNumber, sourceColumnName, targetColumnName);
 
     setBoard(optimisticBoard);
     setIsMoving(true);
@@ -304,9 +317,7 @@ export default function App() {
     try {
       const res = await fetch(`${API_BASE}/move-issue`, {
         method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-        },
+        headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           repo,
           github_token: githubToken,
@@ -316,10 +327,7 @@ export default function App() {
       });
 
       const data = await res.json();
-
-      if (!res.ok) {
-        throw new Error(data["bruh moment"] || "failed to move issue");
-      }
+      if (!res.ok) throw new Error(data["bruh moment"] || "failed to move issue");
     } catch (err) {
       setBoard(previousBoard);
       setError(err.message);
@@ -331,13 +339,12 @@ export default function App() {
 
   const normalizedBoard = board
     ? {
-      ...board,
-      columns: COLUMN_ORDER.map((name) => {
-        return (
-          board.columns.find((c) => c.name === name) || { name, cards: [] }
-        );
-      }),
-    }
+        ...board,
+        columns: COLUMN_ORDER.map(
+          (name) =>
+            board.columns.find((c) => c.name === name) || { name, cards: [] }
+        ),
+      }
     : null;
 
   const activeCard =
@@ -346,32 +353,53 @@ export default function App() {
       : null;
 
   return (
-    <div style={{ padding: 30, fontFamily: "sans-serif" }}>
-      <h1>GitHub Issue Kanban</h1>
+    <div className="app-container">
+      {/* Syncing top-bar */}
+      {isMoving && <div className="sync-bar" />}
 
-      <form onSubmit={loadBoard} style={{ marginBottom: 20 }}>
-        <input
-          placeholder="owner/repo"
-          value={repo}
-          onChange={(e) => setRepo(e.target.value)}
-          style={{ marginRight: 10 }}
-        />
+      {/* Full-screen loading overlay */}
+      {isLoading && <LoadingOverlay message="Generating board…" />}
 
-        <input
-          type="password"
-          placeholder="GitHub token"
-          value={githubToken}
-          onChange={(e) => setGithubToken(e.target.value)}
-          style={{ marginRight: 10 }}
-        />
+      {/* Header */}
+      <header className="app-header">
+        <div className="app-wordmark">
+          <h1>Kanban</h1>
+          <span>GitHub Issues Board</span>
+        </div>
 
-        <button type="submit" disabled={isMoving}>
-          {isMoving ? "Moving..." : "Load Board"}
-        </button>
-      </form>
+        <form className="config-form" onSubmit={loadBoard}>
+          <input
+            placeholder="owner / repo"
+            value={repo}
+            onChange={(e) => setRepo(e.target.value)}
+            required
+          />
+          <input
+            type="password"
+            placeholder="GitHub token"
+            value={githubToken}
+            onChange={(e) => setGithubToken(e.target.value)}
+            required
+          />
+          <button type="submit" disabled={isLoading || isMoving}>
+            {isLoading ? "Loading…" : "Load Board"}
+          </button>
+        </form>
+      </header>
 
-      {error && <div style={{ color: "red", marginBottom: 16 }}>{error}</div>}
+      {/* Error */}
+      {error && <div className="error-banner">{error}</div>}
 
+      {/* Empty state */}
+      {!normalizedBoard && !isLoading && (
+        <div className="empty-state">
+          <div className="empty-state-icon">⬛</div>
+          <h2>No board loaded</h2>
+          <p>Enter a GitHub repo and token above to generate a Kanban board from its issues.</p>
+        </div>
+      )}
+
+      {/* Board */}
       {normalizedBoard && (
         <DndContext
           sensors={sensors}
@@ -380,25 +408,18 @@ export default function App() {
           onDragEnd={handleDragEnd}
           onDragCancel={handleDragCancel}
         >
-          <div
-            style={{
-              display: "grid",
-              gridTemplateColumns: "repeat(4, 1fr)",
-              gap: 20,
-            }}
-          >
+          <div className="kanban-grid">
             {COLUMN_ORDER.map((name) => {
               const column =
                 normalizedBoard.columns.find((c) => c.name === name) || {
                   name,
                   cards: [],
                 };
-
               return <Column key={name} name={name} cards={column.cards} />;
             })}
           </div>
 
-          <DragOverlay>
+          <DragOverlay dropAnimation={null}>
             {activeCard ? <CardContent card={activeCard} dragging /> : null}
           </DragOverlay>
         </DndContext>
