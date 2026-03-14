@@ -161,62 +161,25 @@ def fetch_github_issues(repo, github_token):
 
 
 def build_prompt(issues):
-    issue_json = json.dumps(issues, ensure_ascii=False, indent=2)
+    issue_data = json.dumps(issues, ensure_ascii=False)
 
     return f"""
-You are converting GitHub issues into a Kanban board.
+Categorize these GitHub issues into a 4-column Kanban board: Backlog, Todo, Doing, and Done.
 
-Return ONLY valid JSON.
-Do not include markdown fences.
-Do not include explanations.
-Do not include any text before or after the JSON.
+Logistics:
+1. "Done": Any issue where state is 'closed'.
+2. "Doing": Open issues with labels like 'in progress', 'doing', or 'active'.
+3. "Todo": Open issues with labels like 'todo', 'ready', or 'next'.
+4. "Backlog": All other open issues.
 
-Use exactly this schema:
-{{
-  "columns": [
-    {{
-      "name": "Backlog",
-      "cards": [
-        {{
-          "id": 123,
-          "title": "Example issue title",
-          "body": "Short summary",
-          "labels": ["bug"],
-          "assignees": ["emma"],
-          "state": "open",
-          "url": "https://github.com/..."
-        }}
-      ]
-    }},
-    {{
-      "name": "Todo",
-      "cards": []
-    }},
-    {{
-      "name": "Doing",
-      "cards": []
-    }},
-    {{
-      "name": "Done",
-      "cards": []
-    }}
-  ]
-}}
+Content Rules:
+- Summarize long 'body' text into a concise 1-2 sentence description.
+- If an issue body contains a task list (e.g., "- [ ]"), preserve those specific tasks in the summary.
+- Map the GitHub 'number' to the 'id' field.
+- Ensure every issue provided is assigned to exactly one column.
 
-Rules:
-- Put closed issues in "Done".
-- Put open issues with labels like "in progress", "doing", or "active" in "Doing".
-- Put open issues with labels like "todo", "to-do", "ready", or "next" in "Todo".
-- Put all other open issues in "Backlog".
-- Preserve the original GitHub issue number as "id".
-- Keep "body" short and useful. Summarize if needed.
-- Never invent issues that do not exist.
-- Every issue must appear in exactly one column.
-- If the issue body describes multiple concrete steps, include a short task checklist in the body instead of creating new cards.
-- Your entire output must be valid JSON and must start with '{{' and end with '}}'.
-
-GitHub issues:
-{issue_json}
+Input Data:
+{issue_data}
 """.strip()
 
 
