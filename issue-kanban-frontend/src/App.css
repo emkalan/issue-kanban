@@ -1,4 +1,4 @@
-@import url('https://fonts.googleapis.com/css2?family=Syne:wght@400;500;600;700;800&family=DM+Sans:ital,opsz,wght@0,9..40,300;0,9..40,400;0,9..40,500;1,9..40,300&display=swap');
+@import url('https://fonts.googleapis.com/css2?family=Inter:ital,opsz,wght@0,14..32,300;0,14..32,400;0,14..32,500;0,14..32,600;0,14..32,700;1,14..32,300&display=swap');
 
 /* ── Design Tokens ─────────────────────────────────────────── */
 :root {
@@ -39,8 +39,8 @@
   --radius-md: 12px;
   --radius-lg: 16px;
 
-  --font-display: 'Syne', sans-serif;
-  --font-body: 'DM Sans', sans-serif;
+  --font-display: 'Inter', system-ui, sans-serif;
+  --font-body: 'Inter', system-ui, sans-serif;
 }
 
 /* ── Reset & Base ───────────────────────────────────────────── */
@@ -83,14 +83,15 @@ body {
 
 .app-wordmark h1 {
   font-family: var(--font-display);
-  font-size: 1.5rem;
-  font-weight: 800;
+  font-size: 1.35rem;
+  font-weight: 700;
   margin: 0;
-  letter-spacing: -0.03em;
-  background: linear-gradient(135deg, #e2e8ff 0%, #a0aec0 100%);
+  letter-spacing: -0.04em;
+  background: linear-gradient(135deg, #ff69dc 0%, #1924a3 100%);
   -webkit-background-clip: text;
-  -webkit-text-fill-color: transparent;
   background-clip: text;
+  -webkit-text-fill-color: transparent;
+  /*color: #e2e8ff;*/
 }
 
 .app-wordmark span {
@@ -131,7 +132,9 @@ body {
 }
 
 .config-form button {
-  background: linear-gradient(135deg, #3b82f6 0%, #6366f1 100%);
+  background: linear-gradient(135deg, #3b82f6 0%, #6366f1 50%, #3b82f6 100%);
+  background-size: 200% 100%;
+  background-position: 100% 0;
   color: white;
   border: none;
   padding: 0.55rem 1.25rem;
@@ -141,18 +144,184 @@ body {
   font-weight: 600;
   font-size: 0.85rem;
   letter-spacing: 0.02em;
-  transition: opacity 0.2s, transform 0.15s;
+  transition: background-position 0.4s ease, transform 0.15s, opacity 0.2s, box-shadow 0.3s;
   white-space: nowrap;
 }
 
 .config-form button:hover:not(:disabled) {
-  opacity: 0.9;
+  background-position: 0% 0;
   transform: translateY(-1px);
+  box-shadow: 0 4px 20px rgba(99,102,241,0.4);
+}
+
+.config-form button:active:not(:disabled) {
+  transform: translateY(0);
 }
 
 .config-form button:disabled {
   opacity: 0.5;
   cursor: not-allowed;
+}
+
+/* ── Issue Detail Modal ─────────────────────────────────────── */
+.modal-backdrop {
+  position: fixed;
+  inset: 0;
+  background: rgba(7, 9, 14, 0.8);
+  backdrop-filter: blur(8px);
+  -webkit-backdrop-filter: blur(8px);
+  z-index: 500;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 1.5rem;
+  animation: fade-in 0.15s ease;
+}
+
+.modal {
+  background: var(--surface);
+  border: 1px solid var(--border-bright);
+  border-radius: var(--radius-lg);
+  width: 100%;
+  max-width: 580px;
+  max-height: 85vh;
+  display: flex;
+  flex-direction: column;
+  box-shadow: 0 32px 64px rgba(0,0,0,0.6);
+  animation: modal-in 0.2s cubic-bezier(0.16, 1, 0.3, 1);
+  overflow: hidden;
+}
+
+@keyframes modal-in {
+  from { opacity: 0; transform: translateY(12px) scale(0.97); }
+  to   { opacity: 1; transform: translateY(0) scale(1); }
+}
+
+.modal-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  padding: 1.25rem 1.5rem 1rem;
+  border-bottom: 1px solid var(--border);
+  gap: 1rem;
+}
+
+.modal-meta {
+  display: flex;
+  flex-direction: column;
+  gap: 0.3rem;
+  min-width: 0;
+}
+
+.modal-id {
+  font-size: 0.72rem;
+  font-weight: 600;
+  color: var(--text-dim);
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+}
+
+.modal-title {
+  font-size: 1rem;
+  font-weight: 600;
+  color: var(--text-main);
+  line-height: 1.4;
+  letter-spacing: -0.02em;
+  margin: 0;
+}
+
+.modal-close {
+  background: none;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  color: var(--text-muted);
+  cursor: pointer;
+  width: 28px;
+  height: 28px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 1rem;
+  flex-shrink: 0;
+  transition: background 0.15s, color 0.15s, border-color 0.15s;
+  line-height: 1;
+  padding: 0;
+}
+
+.modal-close:hover {
+  background: var(--surface-raised);
+  color: var(--text-main);
+  border-color: var(--border-bright);
+}
+
+.modal-body {
+  padding: 1.25rem 1.5rem;
+  overflow-y: auto;
+  flex: 1;
+}
+
+.modal-body::-webkit-scrollbar { width: 4px; }
+.modal-body::-webkit-scrollbar-track { background: transparent; }
+.modal-body::-webkit-scrollbar-thumb { background: var(--border-bright); border-radius: 2px; }
+
+.modal-description {
+  font-size: 0.875rem;
+  color: var(--text-muted);
+  line-height: 1.7;
+  white-space: pre-wrap;
+  margin: 0;
+  font-weight: 300;
+}
+
+.modal-description-empty {
+  font-size: 0.85rem;
+  color: var(--text-dim);
+  font-style: italic;
+}
+
+.modal-section {
+  margin-top: 1.25rem;
+}
+
+.modal-section-label {
+  font-size: 0.68rem;
+  font-weight: 600;
+  color: var(--text-dim);
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  margin-bottom: 0.5rem;
+}
+
+.modal-footer {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 0.875rem 1.5rem;
+  border-top: 1px solid var(--border);
+  gap: 0.75rem;
+}
+
+.modal-labels {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.3rem;
+}
+
+.modal-gh-link {
+  font-size: 0.78rem;
+  font-weight: 500;
+  color: var(--text-muted);
+  text-decoration: none;
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  white-space: nowrap;
+  transition: color 0.15s;
+  flex-shrink: 0;
+}
+
+.modal-gh-link:hover {
+  color: #93c5fd;
 }
 
 /* ── Error Banner ───────────────────────────────────────────── */
@@ -235,12 +404,12 @@ body {
 .col-done    .status-dot { background: var(--done);    box-shadow: 0 0 6px var(--done); }
 
 .column-header h3 {
-  font-family: var(--font-display);
-  font-size: 0.78rem;
-  font-weight: 700;
+  font-family: var(--font-body);
+  font-size: 0.72rem;
+  font-weight: 600;
   margin: 0;
   text-transform: uppercase;
-  letter-spacing: 0.08em;
+  letter-spacing: 0.1em;
   color: var(--text-muted);
 }
 

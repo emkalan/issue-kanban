@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import {
   DndContext,
   DragOverlay,
@@ -67,6 +67,15 @@ function findCardById(board, cardId) {
   return null;
 }
 
+const WORKFLOW_LABELS = new Set(["todo", "to-do", "ready", "next", "in progress", "doing", "active"]);
+
+function labelsForColumn(existingLabels, targetColumn) {
+  const nonWorkflow = existingLabels.filter(l => !WORKFLOW_LABELS.has(l.toLowerCase()));
+  if (targetColumn === "Todo")    return [...nonWorkflow, "todo"];
+  if (targetColumn === "Doing")   return [...nonWorkflow, "in progress"];
+  return nonWorkflow; // Backlog and Done get no workflow label
+}
+
 function moveCardInBoard(board, cardId, sourceColumnName, targetColumnName) {
   if (sourceColumnName === targetColumnName) return board;
 
@@ -85,9 +94,72 @@ function moveCardInBoard(board, cardId, sourceColumnName, targetColumnName) {
   if (cardIndex === -1) return board;
 
   const [movedCard] = sourceColumn.cards.splice(cardIndex, 1);
-  targetColumn.cards.unshift(movedCard);
+  const updatedCard = {
+    ...movedCard,
+    labels: labelsForColumn(movedCard.labels || [], targetColumnName),
+  };
+  targetColumn.cards.unshift(updatedCard);
 
   return { ...board, columns: nextColumns };
+}
+
+// ── Issue detail modal ───────────────────────────────────────
+function IssueModal({ card, onClose }) {
+  function handleBackdropClick(e) {
+    if (e.target === e.currentTarget) onClose();
+  }
+
+  useEffect(() => {
+    function onKey(e) { if (e.key === "Escape") onClose(); }
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, [onClose]);
+
+  return (
+    <div className="modal-backdrop" onMouseDown={handleBackdropClick}>
+      <div className="modal">
+        <div className="modal-header">
+          <div className="modal-meta">
+            <span className="modal-id">Issue #{card.id}</span>
+            <h2 className="modal-title">{card.title}</h2>
+          </div>
+          <button className="modal-close" onClick={onClose} aria-label="Close">✕</button>
+        </div>
+
+        <div className="modal-body">
+          {card.body
+            ? <p className="modal-description">{card.body}</p>
+            : <p className="modal-description-empty">No description provided.</p>
+          }
+
+          {card.assignees?.length > 0 && (
+            <div className="modal-section">
+              <div className="modal-section-label">Assignees</div>
+              <div style={{ display: "flex", gap: 6 }}>
+                {card.assignees.map((a) => (
+                  <div key={a} style={{ display: "flex", alignItems: "center", gap: 5 }}>
+                    <Avatar login={a} />
+                    <span style={{ fontSize: "0.78rem", color: "var(--text-muted)" }}>{a}</span>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
+        </div>
+
+        <div className="modal-footer">
+          <div className="modal-labels">
+            {card.labels?.map((l) => <LabelChip key={l} label={l} />)}
+          </div>
+          {card.url && (
+            <a href={card.url} target="_blank" rel="noreferrer" className="modal-gh-link">
+              View on GitHub ↗
+            </a>
+          )}
+        </div>
+      </div>
+    </div>
+  );
 }
 
 // ── Label chip ───────────────────────────────────────────────
@@ -113,9 +185,12 @@ function Avatar({ login }) {
 }
 
 // ── Card content (shared between drag overlay and sortable) ──
-function CardContent({ card, dragging = false }) {
+function CardContent({ card, dragging = false, onCardClick }) {
   return (
-    <div className={`card${dragging ? " dragging" : ""}`}>
+    <div
+      className={`card${dragging ? " dragging" : ""}`}
+      onClick={onCardClick ? (e) => { e.stopPropagation(); onCardClick(card); } : undefined}
+    >
       <div className="card-header">
         <span className="card-id">#{card.id}</span>
         {card.url && (
@@ -154,7 +229,7 @@ function CardContent({ card, dragging = false }) {
 }
 
 // ── Sortable card ────────────────────────────────────────────
-function SortableCard({ card }) {
+function SortableCard({ card, onCardClick }) {
   const { attributes, listeners, setNodeRef, transform, transition, isDragging } =
     useSortable({
       id: `card-${card.id}`,
@@ -172,13 +247,13 @@ function SortableCard({ card }) {
       {...attributes}
       {...listeners}
     >
-      <CardContent card={card} />
+      <CardContent card={card} onCardClick={onCardClick} />
     </div>
   );
 }
 
 // ── Column ───────────────────────────────────────────────────
-function Column({ name, cards }) {
+function Column({ name, cards, onCardClick }) {
   const { setNodeRef, isOver } = useDroppable({
     id: `column-${name}`,
     data: { type: "column", columnName: name },
@@ -202,7 +277,7 @@ function Column({ name, cards }) {
         strategy={verticalListSortingStrategy}
       >
         {cards.map((card) => (
-          <SortableCard key={card.id} card={card} />
+          <SortableCard key={card.id} card={card} onCardClick={onCardClick} />
         ))}
 
         {cards.length === 0 && (
@@ -236,9 +311,12 @@ export default function App() {
   const [isLoading, setIsLoading]     = useState(false);
   const [isMoving, setIsMoving]       = useState(false);
   const [activeCardId, setActiveCardId] = useState(null);
+  const [selectedCard, setSelectedCard] = useState(null);
 
   const sensors = useSensors(
-    useSensor(PointerSensor),
+    useSensor(PointerSensor, {
+      activationConstraint: { distance: 6 },
+    }),
     useSensor(KeyboardSensor, { coordinateGetter: sortableKeyboardCoordinates })
   );
 
@@ -415,7 +493,7 @@ export default function App() {
                   name,
                   cards: [],
                 };
-              return <Column key={name} name={name} cards={column.cards} />;
+              return <Column key={name} name={name} cards={column.cards} onCardClick={setSelectedCard} />;
             })}
           </div>
 
@@ -423,6 +501,11 @@ export default function App() {
             {activeCard ? <CardContent card={activeCard} dragging /> : null}
           </DragOverlay>
         </DndContext>
+      )}
+
+      {/* Issue detail modal */}
+      {selectedCard && (
+        <IssueModal card={selectedCard} onClose={() => setSelectedCard(null)} />
       )}
     </div>
   );

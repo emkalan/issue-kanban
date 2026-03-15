@@ -298,10 +298,50 @@ def compute_updated_issue_fields(current_issue, target_column):
     }
 
 
-def patch_issue(repo, issue_number, github_token, payload):
-    url = repo_issue_url(repo, issue_number)
+def ensure_label_exists(repo, label_name, github_token):
+    """
+    Creates a label on the repo if it doesn't already exist.
+    GitHub returns 422 if you try to set a label that doesn't exist,
+    which is the actual root cause of the label bug.
+    """
+    url = f"https://api.github.com/repos/{repo}/labels"
     headers = github_headers(github_token)
 
+    # Pick a neutral colour per canonical label so they look reasonable
+    LABEL_COLORS = {
+        TODO_LABEL_CANONICAL:  "0ea5e9",  # sky blue
+        DOING_LABEL_CANONICAL: "f59e0b",  # amber
+    }
+    color = LABEL_COLORS.get(normalize_label(label_name), "6b7280")
+
+    try:
+        response = requests.post(
+            url,
+            headers=headers,
+            json={"name": label_name, "color": color},
+            timeout=20,
+        )
+        # 201 = created, 422 = already exists — both are fine
+        if response.status_code not in (201, 422):
+            response.raise_for_status()
+    except requests.exceptions.RequestException as e:
+        raise RuntimeError(f"could not ensure label '{label_name}' exists: {e}")
+
+
+def patch_issue(repo, issue_number, github_token, payload):
+    """
+    GitHub's PATCH endpoint accepts `labels` alongside `state`, BUT will
+    silently drop or 422 on labels that don't yet exist in the repo.
+    We pre-create any workflow labels before sending the patch.
+    """
+    headers = github_headers(github_token)
+
+    # Ensure any workflow labels we're about to set actually exist on the repo
+    for label_name in payload.get("labels", []):
+        if normalize_label(label_name) in WORKFLOW_LABEL_ALIASES:
+            ensure_label_exists(repo, label_name, github_token)
+
+    url = repo_issue_url(repo, issue_number)
     try:
         response = requests.patch(url, headers=headers, json=payload, timeout=20)
         response.raise_for_status()
