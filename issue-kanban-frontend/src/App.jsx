@@ -471,7 +471,7 @@ export default function App() {
       {/* Empty state */}
       {!normalizedBoard && !isLoading && (
         <div className="empty-state">
-          <div className="empty-state-icon">⬛</div>
+          <div className="empty-state-icon">🖇️</div>
           <h2>No board loaded</h2>
           <p>Enter a GitHub repo and token above to generate a Kanban board from its issues.</p>
         </div>
