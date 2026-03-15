@@ -79,6 +79,7 @@ body {
   display: flex;
   flex-direction: column;
   gap: 2px;
+  padding: 0rem 4rem; 
 }
 
 .app-wordmark h1 {
